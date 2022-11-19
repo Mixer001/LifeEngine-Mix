@@ -11,17 +11,23 @@ class Organism {
     constructor(col, row, env, parent=null) {
         this.c = col;
         this.r = row;
+
+        this.physics_c = col;
+        this.physics_r = row;
+        this.physics_vc = 0;
+        this.physics_vr = 0;
+        this.physics_fc = 0;
+        this.physics_fr = 0;
+
         this.env = env;
         this.lifetime = 0;
         this.food_collected = 0;
         this.living = true;
         this.anatomy = new Anatomy(this)
-        this.direction = Directions.down; // direction of movement
         this.rotation = Directions.up; // direction of rotation
         this.can_rotate = Hyperparams.rotationEnabled;
         this.move_count = 0;
         this.move_range = 4;
-        this.ignore_brain_for = 0;
         this.mutability = 5;
         this.damage = 0;
         this.brain = new Brain(this);
@@ -38,14 +44,14 @@ class Organism {
             //deep copy parent cells
             this.anatomy.addInheritCell(c);
         }
-        if(parent.anatomy.is_mover && parent.anatomy.has_eyes) {
+        if(parent.anatomy.num_movers && parent.anatomy.has_eyes) {
             this.brain.copy(parent.brain);
         }
     }
 
     // amount of food required before it can reproduce
     foodNeeded() {
-        return this.anatomy.is_mover ? this.anatomy.cells.length + Hyperparams.extraMoverFoodCost : this.anatomy.cells.length;
+        return this.anatomy.num_movers ? this.anatomy.cells.length + Hyperparams.extraMoverFoodCost : this.anatomy.cells.length;
     }
 
     lifespan() {
@@ -79,7 +85,7 @@ class Organism {
         } 
         var mutated = false;
         if (Math.random() * 100 <= prob) {
-            if (org.anatomy.is_mover && Math.random() * 100 <= 10) { 
+            if (org.anatomy.num_movers && Math.random() * 100 <= 10) { 
                 if (org.anatomy.has_eyes) {
                     org.brain.mutate();
                 }
@@ -152,28 +158,43 @@ class Organism {
     }
 
     attemptMove() {
-        var direction = Directions.scalars[this.direction];
-        var direction_c = direction[0];
-        var direction_r = direction[1];
-        var new_c = this.c + direction_c;
-        var new_r = this.r + direction_r;
-        if (this.isClear(new_c, new_r)) {
-            for (var cell of this.anatomy.cells) {
-                var real_c = this.c + cell.rotatedCol(this.rotation);
-                var real_r = this.r + cell.rotatedRow(this.rotation);
-                this.env.changeCell(real_c, real_r, CellStates.empty, null);
+        var mass = this.anatomy.cells.length; // each cell weighs 1 mass unit
+        // calculate velocity and position (one frame is 1 time unit)
+        this.physics_vc += (this.physics_fc - this.physics_vc * Hyperparams.medium_viscosity) / mass;
+        this.physics_vr += (this.physics_fr - this.physics_vr * Hyperparams.medium_viscosity) / mass;
+        this.physics_c += this.physics_vc;
+        this.physics_r += this.physics_vr;
+        // reset force for the next frame
+        this.physics_fc = 0;
+        this.physics_fr = 0;
+        // convert physics position to real position
+        var new_c = Math.round(this.physics_c);
+        var new_r = Math.round(this.physics_r);
+        // check if the grid position has changed (it may not happen every frame for small velocities)
+        if (!(new_c == this.c && new_r == this.r)) {
+            // check if moving is possible
+            if (this.isClear(new_c, new_r)) {
+                for (var cell of this.anatomy.cells) {
+                    var real_c = this.c + cell.rotatedCol(this.rotation);
+                    var real_r = this.r + cell.rotatedRow(this.rotation);
+                    this.env.changeCell(real_c, real_r, CellStates.empty, null);
+                }
+                this.c = new_c;
+                this.r = new_r;
+                this.updateGrid();
+                return true;
             }
-            this.c = new_c;
-            this.r = new_r;
-            this.updateGrid();
-            return true;
+            // if path is blocked lose all velocity and set physics position to real position
+            this.physics_vc = 0;
+            this.physics_vr = 0;
+            this.physics_c = this.c;
+            this.physics_r = this.r;
         }
         return false;
     }
 
     attemptRotate() {
         if(!this.can_rotate){
-            this.direction = Directions.getRandomDirection();
             this.move_count = 0;
             return true;
         }
@@ -185,7 +206,6 @@ class Organism {
                 this.env.changeCell(real_c, real_r, CellStates.empty, null);
             }
             this.rotation = new_rotation;
-            this.direction = Directions.getRandomDirection();
             this.updateGrid();
             this.move_count = 0;
             return true;
@@ -193,9 +213,9 @@ class Organism {
         return false;
     }
 
-    changeDirection(dir) {
-        this.direction = dir;
-        this.move_count = 0;
+    applyForce(fc, fr) {
+        this.physics_fc += fc;
+        this.physics_fr += fr;
     }
 
     // assumes either c1==c2 or r1==r2, returns true if there is a clear path from point 1 to 2
@@ -288,23 +308,13 @@ class Organism {
                 return this.living
         }
         
-        if (this.anatomy.is_mover) {
+        if (this.anatomy.num_movers) {
             this.move_count++;
-            var changed_dir = false;
-            if (this.ignore_brain_for == 0){
-                changed_dir = this.brain.decide();
-            }  
-            else{
-                this.ignore_brain_for --;
-            }
-            var moved = this.attemptMove();
-            if ((this.move_count > this.move_range && !changed_dir) || !moved){
-                var rotated = this.attemptRotate();
-                if (!rotated) {
-                    this.changeDirection(Directions.getRandomDirection());
-                    if (changed_dir)
-                        this.ignore_brain_for = this.move_range + 1;
-                }
+
+            this.brain.decide();
+            this.attemptMove();
+            if (this.move_count > this.move_range){
+                this.attemptRotate();
             }
         }
 
@@ -320,7 +330,7 @@ class Organism {
     serialize() {
         let org = SerializeHelper.copyNonObjects(this);
         org.anatomy = this.anatomy.serialize();
-        if (this.anatomy.is_mover && this.anatomy.has_eyes)
+        if (this.anatomy.num_movers && this.anatomy.has_eyes)
             org.brain = this.brain.serialize();
         org.species_name = this.species.name;
         return org;

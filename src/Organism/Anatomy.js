@@ -12,7 +12,7 @@ class Anatomy {
     clear() {
         this.cells = [];
         this.is_producer = false;
-        this.is_mover = false;
+        this.num_movers = 0;
         this.has_eyes = false;
     }
 
@@ -81,13 +81,13 @@ class Anatomy {
 
     checkTypeChange() {
         this.is_producer = false;
-        this.is_mover = false;
+        this.num_movers = 0;
         this.has_eyes = false;
         for (var cell of this.cells) {
             if (cell.state == CellStates.producer)
                 this.is_producer = true;
             if (cell.state == CellStates.mover)
-                this.is_mover = true;
+                this.num_movers += 1;
             if (cell.state == CellStates.eye)
                 this.has_eyes = true;
         }

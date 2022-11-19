@@ -203,7 +203,7 @@ class EditorController extends CanvasController{
 
     setBrainPanelVisibility() {
         var org = this.env.organism;
-        if (org.anatomy.has_eyes && org.anatomy.is_mover) {
+        if (org.anatomy.has_eyes && org.anatomy.num_movers) {
             $('.brain-details').css('display', 'block');
             return true;
         }
@@ -229,7 +229,7 @@ class EditorController extends CanvasController{
 
     setMoveRangeVisibility() {
         var org = this.env.organism;
-        if (org.anatomy.is_mover) {
+        if (org.anatomy.num_movers) {
             $('#move-range-cont').css('display', 'block');
             $('#move-range').css('display', 'block');
             return true;

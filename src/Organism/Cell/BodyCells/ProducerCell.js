@@ -9,7 +9,7 @@ class ProducerCell extends BodyCell{
     }
 
     performFunction() {
-        if (this.org.anatomy.is_mover && !Hyperparams.moversCanProduce)
+        if (this.org.anatomy.num_movers && !Hyperparams.moversCanProduce)
             return;
         var env = this.org.env;
         var prob = Hyperparams.foodProdProb;

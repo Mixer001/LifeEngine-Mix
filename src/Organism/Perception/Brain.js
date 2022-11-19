@@ -4,13 +4,13 @@ const CellStates = require("../Cell/CellStates");
 
 const Decision = {
     neutral: 0,
-    retreat: 1,
-    chase: 2,
+    retreat: -1,
+    chase: 1,
     getRandom: function(){
-        return Math.floor(Math.random() * 3);
+        return Math.floor(Math.random() * 3) - 1;
     },
     getRandomNonNeutral: function() {
-        return Math.floor(Math.random() * 2)+1;
+        return 2 * Math.floor(Math.random() * 2) - 1;
     }
 }
 
@@ -52,29 +52,25 @@ class Brain {
     }
 
     decide() {
-        var decision = Decision.neutral;
-        var closest = Hyperparams.lookRange + 1;
-        var move_direction = 0;
+        var force_c = 0;
+        var force_r = 0;
         for (var obs of this.observations) {
             if (obs.cell == null || obs.cell.owner == this.owner) {
                 continue;
             }
-            if (obs.distance < closest) {
-                decision = this.decisions[obs.cell.state.name];
-                move_direction = obs.direction;
-                closest = obs.distance;
-            }
+            var decision = this.decisions[obs.cell.state.name];
+            force_c += Directions.scalars[obs.direction][0] * decision;
+            force_r += Directions.scalars[obs.direction][1] * decision;
         }
         this.observations = [];
-        if (decision == Decision.chase) {
-            this.owner.changeDirection(move_direction);
+        if (force_c*force_c + force_r*force_r > 0) {
+            this.owner.applyForce(force_c, force_r);
             return true;
         }
-        else if (decision == Decision.retreat) {
-            this.owner.changeDirection(Directions.getOppositeDirection(move_direction));
-            return true;
+        else {
+            var new_dir = Directions.getRandomDirection()
+            this.owner.applyForce(Directions.scalars[new_dir][0], Directions.scalars[new_dir][1])
         }
-        return false;
     }
 
     mutate() {
