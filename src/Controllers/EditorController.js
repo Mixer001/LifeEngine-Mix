@@ -171,7 +171,6 @@ class EditorController extends CanvasController{
 
         if (this.setBrainPanelVisibility()) {
             this.setBrainDetails();
-
         }
         $('#organism-details').css('display', 'block');
     }
@@ -216,10 +215,10 @@ class EditorController extends CanvasController{
         var retreat_types = [];
         for(var cell_name in this.env.organism.brain.decisions) {
             var decision = this.env.organism.brain.decisions[cell_name];
-            if (decision == 1) {
+            if (decision == -1) {
                 retreat_types.push(cell_name)
             }
-            else if (decision == 2) {
+            else if (decision == 1) {
                 chase_types.push(cell_name);
             }
         }
